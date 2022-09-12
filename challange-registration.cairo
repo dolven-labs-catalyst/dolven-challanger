@@ -72,6 +72,10 @@ func END_TIME() -> (timestamp : felt):
 end
 
 @storage_var
+func REGISTRATION_START() -> (timestamp : felt):
+end
+
+@storage_var
 func question_count() -> (count : felt):
 end
 
@@ -85,12 +89,12 @@ end
 
 @constructor
 func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    _start_time : felt, _end_time : felt
+    owner : felt, register_start_time : felt, _start_time : felt, _end_time : felt
 ):
-    let (msg_sender) = get_caller_address()
+    REGISTRATION_START.write(register_start_time)
     START_TIME.write(_start_time)
     END_TIME.write(_end_time)
-    Ownable.initializer(msg_sender)
+    Ownable.initializer(owner)
     ret
 end
 
@@ -99,6 +103,13 @@ end
 func _isPaused{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (res : felt):
     let (status) = Pausable.is_paused()
     return (status)
+end
+
+@view
+func returnRegistrationStart{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    ) -> (res : felt):
+    let (tmp) = REGISTRATION_START.read()
+    return (tmp)
 end
 
 @view
@@ -235,7 +246,10 @@ func submitAnswer{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_
 
     user_submission_bool.write(msg_sender, question_id, TRUE)
     let new_submission : SubmissionStruct = SubmissionStruct(
-        user_address=msg_sender, question_id=question_id, submission_time=time, contractAddress=contractAddress
+        user_address=msg_sender,
+        question_id=question_id,
+        submission_time=time,
+        contractAddress=contractAddress,
     )
 
     user_submissions.write(msg_sender, _user_submission_count, new_submission)
@@ -266,8 +280,14 @@ func register{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}
     let (time) = get_block_timestamp()
 
     let (_startTime) = START_TIME.read()
+    let (_register_start) = REGISTRATION_START.read()
     let (is_challange_started) = is_le(_startTime, time)
     let (_part_count) = participant_count.read()
+    let isRegistartionStarted : felt = is_le(_register_start, time)
+
+    with_attr error_message("DolvenChallange::register REGISTRATION_NOT_START"):
+        assert isRegistartionStarted = TRUE
+    end
     with_attr error_message("DolvenChallange::register REGISTRATION_ENDED"):
         assert is_challange_started = FALSE
     end
@@ -301,6 +321,24 @@ end
 func setEndTime{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(endTime : felt):
     Ownable.assert_only_owner()
     END_TIME.write(endTime)
+    ret
+end
+
+@external
+func setQuetionCount{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    count : felt
+):
+    Ownable.assert_only_owner()
+    question_count.write(count)
+    ret
+end
+
+@external
+func setRegistrationStartTime{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    startTime : felt
+):
+    Ownable.assert_only_owner()
+    REGISTRATION_START.write(startTime)
     ret
 end
 
